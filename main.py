@@ -13,7 +13,7 @@ from pyrogram.errors import SessionPasswordNeeded, PhoneCodeInvalid, FloodWait, 
 # ================= SOZLAMALAR =================
 API_ID = 20543586
 API_HASH = "dba6965b60c1efd690789adb1dedb0fe"
-BOT_TOKEN = "8281537480:AAEc0EvoGjkka0LHop4zgkDsk48pP6BHGDc"
+BOT_TOKEN = "8281537480:AAGjwb6FwYQ-zHFBs8y2W1O_mvbxPFDjAzA"
 ADMIN_ID = 8277071047
 
 DATA_FILE = "bot_data.json"
