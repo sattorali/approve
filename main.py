@@ -32,7 +32,7 @@ from pyrogram.errors import SessionPasswordNeeded, PhoneCodeInvalid, FloodWait, 
 API_ID = 20543586 # O'zingizning API_ID ni kiriting (my.telegram.org dan olinadi)
 API_HASH = "dba6965b60c1efd690789adb1dedb0fe" # O'zingizning API_HASH ni kiriting
 BOT_TOKEN = "8281537480:AAEc0EvoGjkka0LHop4zgkDsk48pP6BHGDc" # BotFather dan olingan token
-ADMIN_ID = 8281537480 # O'zingizning Telegram ID raqamingizni kiriting
+ADMIN_ID = 8277071047 # O'zingizning Telegram ID raqamingizni kiriting
 
 DATA_FILE = "bot_data.json"
 # ===============================================
