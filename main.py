@@ -225,6 +225,12 @@ async def approve_requests(channel, target_count, rate_per_minute, message):
     
     try:
         await app.connect()
+        
+        # 🟢 MANA SHU QISMNI QO'SHAMIZ (Keshni yangilash uchun):
+        async for dialog in app.get_dialogs(limit=50):
+            pass 
+        # 🟢 QO'SHILDI
+            
         approved = 0
         failed = 0
         sleep_time = 60.0 / rate_per_minute if rate_per_minute > 0 else 1.5
