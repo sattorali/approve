@@ -1,4 +1,11 @@
-# KODNING ENG TEPASIGA QO'SHILADI:
+import asyncio
+# Pyrogram ishlashi uchun zarur bo'lgan muhitni oldindan yaratib beramiz:
+asyncio.set_event_loop(asyncio.new_event_loop())
+
+from flask import Flask
+import threading
+from pyrogram import Client, filters
+# ... (va qolgan barcha kodingiz o'zgarishsiz qoladi)
 from flask import Flask
 import threading
 
