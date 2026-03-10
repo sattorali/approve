@@ -2,13 +2,25 @@ import asyncio
 # Pyrogram ishlashi uchun zarur bo'lgan muhitni oldindan yaratib beramiz:
 asyncio.set_event_loop(asyncio.new_event_loop())
 
-from flask import Flask
+import json
+import os
 import threading
+from flask import Flask
 from pyrogram import Client, filters
-# ... (va qolgan barcha kodingiz o'zgarishsiz qoladi)
-from flask import Flask
-import threading
+from pyrogram.types import ReplyKeyboardMarkup, KeyboardButton
+from pyrogram.errors import SessionPasswordNeeded, PhoneCodeInvalid, FloodWait, PasswordHashInvalid
 
+# ================= SOZLAMALAR =================
+API_ID = 20543586
+API_HASH = "dba6965b60c1efd690789adb1dedb0fe"
+BOT_TOKEN = "8281537480:AAEc0EvoGjkka0LHop4zgkDsk48pP6BHGDc"
+ADMIN_ID = 8277071047
+
+DATA_FILE = "bot_data.json"
+is_working = False # Bir vaqtda ikkita jarayon ishlashini to'xtatuvchi kalit
+# ===============================================
+
+# --- FLASK VEB-SERVER (Render.com da bot uxlab qolmasligi uchun) ---
 app = Flask(__name__)
 
 @app.route('/')
@@ -16,28 +28,9 @@ def home():
     return "Bot 100% ishlap turibdi!"
 
 def run_server():
-    # Render xostingi uchun 8080 porti ochiladi
     app.run(host="0.0.0.0", port=8080)
 
-# BU YERDA SIZNING ASOSIY BOT KODINGIZ BO'LADI...
-# (Avval tashlab bergan pyrogram bot kodimni shu yerga qo'yasiz)
-import asyncio
-import json
-import os
-from pyrogram import Client, filters
-from pyrogram.types import ReplyKeyboardMarkup, KeyboardButton
-from pyrogram.errors import SessionPasswordNeeded, PhoneCodeInvalid, FloodWait, PasswordHashInvalid
-
-# ================= SOZLAMALAR =================
-API_ID = 20543586 # O'zingizning API_ID ni kiriting (my.telegram.org dan olinadi)
-API_HASH = "dba6965b60c1efd690789adb1dedb0fe" # O'zingizning API_HASH ni kiriting
-BOT_TOKEN = "8281537480:AAEc0EvoGjkka0LHop4zgkDsk48pP6BHGDc" # BotFather dan olingan token
-ADMIN_ID = 8277071047 # O'zingizning Telegram ID raqamingizni kiriting
-
-DATA_FILE = "bot_data.json"
-# ===============================================
-
-# Ma'lumotlarni xotirada va faylda saqlash tizimi
+# --- MA'LUMOTLARNI SAQLASH TIZIMI ---
 if not os.path.exists(DATA_FILE):
     with open(DATA_FILE, "w") as f:
         json.dump({"session": None}, f)
@@ -50,15 +43,14 @@ def save_data(data):
     with open(DATA_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
-# Bot va Foydalanuvchi mijozlari
+# --- BOT VA KLIENTLAR ---
 bot = Client("admin_bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 temp_client = None
 
-# Admin qadamlarini kuzatish uchun FSM (State Machine) o'rniga oddiy lug'at
 user_states = {}
 temp_data = {}
 
-# Asosiy menyu klaviaturasi
+# --- KLAVIATURALAR ---
 main_menu = ReplyKeyboardMarkup(
     [
         [KeyboardButton("👤 Akkount boshqaruvi"), KeyboardButton("🚀 Tasdiqlash bo'limi")]
@@ -72,30 +64,36 @@ acc_menu = ReplyKeyboardMarkup(
     ], resize_keyboard=True
 )
 
-# ======== ADMIN TEKSHIRUVI ========
+# ======== BEGONALARNI TO'SIQ ========
 @bot.on_message(filters.private & ~filters.user(ADMIN_ID))
 async def not_admin(client, message):
     await message.reply_text("⛔️ Kechirasiz, bu bot faqat admin uchun ishlaydi.")
 
-# ======== START BUYRUG'I ========
+# ======== ASOSIY BUYRUQLAR ========
 @bot.on_message(filters.private & filters.command("start") & filters.user(ADMIN_ID))
 async def start_cmd(client, message):
     user_states[ADMIN_ID] = "main_menu"
-    await message.reply_text("👋 Xush kelibsiz, Admin! \nKerakli bo'limni tanlang:", reply_markup=main_menu)
+    await message.reply_text("👋 Xush kelibsiz, Admin! \nKerakli bo'limni tanlang:\n\nℹ️ Agar jarayonni to'xtatmoqchi bo'lsangiz, /stop buyrug'ini yuboring.", reply_markup=main_menu)
 
-# ======== MENYU NAVIGATSIYASI ========
+@bot.on_message(filters.private & filters.command("stop") & filters.user(ADMIN_ID))
+async def stop_cmd(client, message):
+    global is_working
+    is_working = False
+    user_states[ADMIN_ID] = "main_menu"
+    await message.reply_text("🛑 Barcha tasdiqlash jarayonlari to'xtatilmoqda...", reply_markup=main_menu)
+
+# ======== MENYU VA XABARLARNI QABUL QILISH ========
 @bot.on_message(filters.private & filters.text & filters.user(ADMIN_ID))
 async def handle_text(client, message):
     text = message.text
     state = user_states.get(ADMIN_ID, "main_menu")
 
-    # Orqaga qaytish
     if text == "🔙 Orqaga":
         user_states[ADMIN_ID] = "main_menu"
         await message.reply_text("Asosiy menyuga qaytdingiz.", reply_markup=main_menu)
         return
 
-    # 1. AKKOUNT BOSHQARUVI
+    # --- 1. AKKOUNT BOSHQARUVI ---
     if text == "👤 Akkount boshqaruvi":
         data = load_data()
         status = "✅ Ulangan" if data.get("session") else "❌ Ulanmagan"
@@ -112,7 +110,7 @@ async def handle_text(client, message):
         await message.reply_text("Telefon raqamingizni xalqaro formatda yuboring:\nMasalan: +998901234567")
         return
 
-    # 2. TASDIQLASH BO'LIMI
+    # --- 2. TASDIQLASH BO'LIMI ---
     if text == "🚀 Tasdiqlash bo'limi":
         data = load_data()
         if not data.get("session"):
@@ -120,10 +118,10 @@ async def handle_text(client, message):
             return
         
         user_states[ADMIN_ID] = "waiting_channel"
-        await message.reply_text("Kanal Username'ini (@kanal) yoki ID raqamini yuboring:")
+        await message.reply_text("Kanal Username'ini (@kanal), Ssilkasini yoki ID raqamini yuboring:")
         return
 
-    # --- AKKOUNT QO'SHISH QADAMLARI ---
+    # --- QADAMLAR TIZIMI ---
     if state == "waiting_phone":
         global temp_client
         phone = text.strip()
@@ -181,13 +179,10 @@ async def handle_text(client, message):
             user_states[ADMIN_ID] = "main_menu"
             await temp_client.disconnect()
 
-    # --- TASDIQLASH QADAMLARI ---
     elif state == "waiting_channel":
         temp_data["channel"] = text
         user_states[ADMIN_ID] = "waiting_count"
-        # Izoh: 100k so'rovni oldindan sanab chiqish API limitiga tushib qoladi.
-        # Shuning uchun bot qancha tasdiqlashni o'zingizdan so'raydi.
-        await message.reply_text("Qabul qilish uchun so'rovlar soni aniqlanmoqda (API cheklovini oldini olish uchun aniq raqam o'rniga mo'ljalni kiriting).\n\nJami qancha so'rovni tasdiqlamoqchisiz? (Masalan: 100000)")
+        await message.reply_text("Jami qancha so'rovni tasdiqlamoqchisiz? (Masalan: 100000)\n\nFaqat raqam yozing:")
 
     elif state == "waiting_count":
         if not text.isdigit():
@@ -207,18 +202,26 @@ async def handle_text(client, message):
         channel = temp_data["channel"]
         
         user_states[ADMIN_ID] = "main_menu"
-        await message.reply_text(f"🚀 Jarayon boshlandi!\nKanal: {channel}\nMaqsad: {target} ta\nTezlik: Daqiqasiga {rate} ta.", reply_markup=main_menu)
+        await message.reply_text(f"🚀 Jarayon boshlashga tayyorlanmoqda...\nKanal: {channel}\nMaqsad: {target} ta\nTezlik: Daqiqasiga {rate} ta.", reply_markup=main_menu)
         
-        # Fon rejimida jarayonni ishga tushirish (bot qotib qolmasligi uchun)
+        # Jarayonni fon rejimida ishga tushirish
         asyncio.create_task(approve_requests(channel, target, rate, message))
 
 # ======== TASDIQLASH JARAYONI (WORKER) ========
 async def approve_requests(channel, target_count, rate_per_minute, message):
+    global is_working
+    
+    if is_working:
+        await message.reply_text("⚠️ Hozir boshqa tasdiqlash jarayoni ishlamoqda!\nAvval uni /stop buyrug'i bilan to'xtating.")
+        return
+        
+    is_working = True
     data = load_data()
     session_string = data.get("session")
     
     if not session_string:
-        await message.reply_text("❌ Akkount topilmadi. Jarayon bekor qilindi.")
+        await message.reply_text("❌ Akkount topilmadi. Avval akkaunt qo'shing!")
+        is_working = False
         return
 
     app = Client("worker_session", session_string=session_string, in_memory=True)
@@ -226,26 +229,46 @@ async def approve_requests(channel, target_count, rate_per_minute, message):
     try:
         await app.connect()
         
-        # 🟢 MANA SHU QISMNI QO'SHAMIZ (Keshni yangilash uchun):
-        async for dialog in app.get_dialogs(limit=50):
+        # 1. Keshni yangilash (Peer ID xatosi chiqmasligi uchun)
+        async for dialog in app.get_dialogs(limit=200):
             pass 
-        # 🟢 QO'SHILDI
             
+        # 2. Kanal manzilini tozalash (Username, Link yoki ID ga moslash)
+        clean_channel = channel.strip()
+        if clean_channel.replace("-", "").isdigit():
+            chat_target = int(clean_channel)
+        else:
+            if "t.me/" in clean_channel:
+                chat_target = clean_channel.split("t.me/")[1].replace("+", "")
+            else:
+                chat_target = clean_channel
+                
+        # 3. Kanalni qidirish va ID ni tasdiqlash
+        try:
+            chat = await app.get_chat(chat_target)
+            real_chat_id = chat.id
+            await message.reply_text(f"✅ Kanal topildi: {chat.title}\nTasdiqlash boshlandi! (To'xtatish uchun /stop)")
+        except Exception as e:
+            await message.reply_text(f"❌ KANALNI TOPIB BO'LMADI!\nSabab: {e}\n\n⚠️ Ulangan akkaunt ushbu kanalda ADMIN ekanligiga va unga a'zolarni qo'shish huquqi berilganiga ishonch hosil qiling.")
+            is_working = False
+            return
+
         approved = 0
         failed = 0
         sleep_time = 60.0 / rate_per_minute if rate_per_minute > 0 else 1.5
 
-        # ID yoki Username ekanini tekshiramiz
-        chat_target = int(channel) if channel.replace("-", "").isdigit() else channel
-
-        async for request in app.get_chat_join_requests(chat_target):
+        async for request in app.get_chat_join_requests(real_chat_id):
+            if not is_working:
+                await message.reply_text("🛑 Jarayon /stop buyrug'i orqali muvaffaqiyatli to'xtatildi.")
+                break
+                
             try:
-                await app.approve_chat_join_request(chat_target, request.user.id)
+                await app.approve_chat_join_request(real_chat_id, request.user.id)
                 approved += 1
                 
-                # Har 500 tada adminga hisobot yuboradi (100k limitda bot spam bo'lmasligi uchun)
+                # Har 500 ta tasdiqlashda xabar beradi
                 if approved % 500 == 0:
-                    await message.reply_text(f"🔄 Kuting, jarayon ketmoqda...\nTasdiqlandi: {approved} ta.")
+                    await message.reply_text(f"🔄 Jarayon davom etmoqda...\nTasdiqlandi: {approved} ta.")
                 
                 if approved >= target_count:
                     break
@@ -258,22 +281,20 @@ async def approve_requests(channel, target_count, rate_per_minute, message):
             except Exception as e:
                 failed += 1
 
-        await message.reply_text(f"✅ JARAYON YAKUNLANDI!\n\nKanal: {channel}\nMuvaffaqiyatli tasdiqlandi: {approved} ta\nXatoliklar: {failed} ta.")
+        if is_working: # Agar o'zimiz to'xtatmagan bo'lsak, tabrik yuboramiz
+            await message.reply_text(f"✅ JARAYON YAKUNLANDI!\n\nKanal: {chat.title}\nMuvaffaqiyatli tasdiqlandi: {approved} ta\nXatoliklar: {failed} ta.")
 
     except Exception as e:
         await message.reply_text(f"❌ Xatolik yuz berdi: {e}")
     finally:
+        is_working = False # Jarayon yakunlangach, bandlikni ochamiz
         if app.is_connected:
             await app.disconnect()
 
 # ================= ISHGA TUSHIRISH =================
 if __name__ == "__main__":
-    print("🤖 Bot ishga tushdi...")
-    bot.run()
-# KODNING ENG PASTGI QISMI QUYIDAGICHA BO'LADI:
-if __name__ == "__main__":
-    print("🤖 Bot va Veb-server ishga tushdi...")
-    # Flask serverni alohida oqimda ishga tushiramiz
-    threading.Thread(target=run_server).start()
-    # Pyrogram botni ishga tushiramiz
+    print("🤖 Bot va Veb-server ishga tushmoqda...")
+    # 1. Flask serverni alohida tizimda yurgizamiz
+    threading.Thread(target=run_server, daemon=True).start()
+    # 2. Pyrogram botni ishga tushiramiz
     bot.run()
